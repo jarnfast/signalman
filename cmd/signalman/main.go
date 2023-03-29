@@ -1,90 +1,94 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
+	"io"
 	"os"
 	"os/exec"
-	"path"
+	"os/signal"
 
 	"jarnfast/signalman/pkg"
+	"jarnfast/signalman/pkg/api"
+	"jarnfast/signalman/pkg/cmdwrapper"
+	"jarnfast/signalman/pkg/utl"
+
+	"go.uber.org/zap"
 )
 
-var version string = "1.0"
-var build string = "n/a"
+func createLogger() *zap.SugaredLogger {
+	var config zap.Config
 
-type handlers struct {
-}
+	configFilename := os.Getenv("SIGNALMAN_LOG_CONFIGFILE")
 
-type adminPortal struct {
-}
+	if configFilename != "" {
+		configFile, err := os.Open(configFilename)
+		if err != nil {
+			panic(fmt.Sprintf("Unable to open config file: %v", err))
 
-func newAdminPortal() *adminPortal {
-	return &adminPortal{}
-}
+		}
+		rawJSON, err := io.ReadAll(configFile)
+		if err != nil {
+			panic(fmt.Sprintf("Unable to read config file: %v", err))
+		}
 
-func (h *handlers) status(response http.ResponseWriter, request *http.Request) {
-	response.WriteHeader(http.StatusOK)
-	response.Write([]byte(versionString()))
-	response.Write([]byte(fmt.Sprintf("Args: %d, %s", len(os.Args[1:]), os.Args[1:])))
-}
+		if err := json.Unmarshal(rawJSON, &config); err != nil {
+			panic(fmt.Sprintf("Unable to parse config file as JSON: %v", err))
+		}
 
-func (h *handlers) signal(response http.ResponseWriter, request *http.Request) {
-	if request.Method != "GET" {
-		response.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	fmt.Println("Get request", request.URL)
-}
-func (h *handlers) kill(response http.ResponseWriter, request *http.Request) {
-	os.Exit(1337)
-}
-func versionString() string {
-	//return fmt.Sprintf("%s version %s (build %s)", path.Base(os.Args[0]), version, build)
-	return fmt.Sprintf("%s version %s (build %s)", path.Base(os.Args[0]), pkg.Version, build)
-}
-
-func main() {
-	fmt.Println("Starting", versionString())
-
-	addr := os.Getenv("SIGNALMAN_LISTEN_ADDRESS")
-	if addr == "" {
-		addr = "localhost:30000"
-	}
-
-	h := &handlers{}
-	http.HandleFunc("/status", h.status)
-	http.HandleFunc("/kill", h.kill)
-	http.HandleFunc("/signal/", h.signal)
-
-	go func() {
-		err := http.ListenAndServe(addr, nil)
+	} else {
+		config = zap.NewProductionConfig()
+		var err error
+		config.Level, err = zap.ParseAtomicLevel(utl.GetenvDefault("SIGNALMAN_LOG_LEVEL", "info"))
 		if err != nil {
 			panic(err)
 		}
-	}()
-
-	fmt.Println("Listening for commands on", addr)
-
-	args := os.Args[1:]
-	binary, err := exec.LookPath(args[0])
-	if err != nil {
-		fmt.Println("Command not found", binary)
-		panic(err)
 	}
 
-	cmd := exec.Command(binary, args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
+	logger, _ := config.Build()
 
-	err = cmd.Start()
+	defer logger.Sync()
+
+	sugar := logger.Sugar()
+	return sugar
+}
+
+func main() {
+	logger := createLogger()
+
+	logger.Infof("Starting %s", pkg.VersionString())
+
+	sigs := make(chan os.Signal, 10)
+
+	// Relay incoming signals to process
+	signal.Notify(sigs)
+
+	a := api.NewApi(logger)
+	// Relay signals received on HTTP
+	a.Notify(sigs)
+	a.ListenAndServe()
+
+	c := cmdwrapper.NewCmdWrapper(logger)
+	// Subscribe on the received signals
+	c.Subscribe(sigs)
+	c.Start()
+
+	exitCode, err := c.Wait()
+
+	close(sigs)
+
 	if err != nil {
-		fmt.Println("Unable to run command", err)
-		panic(err)
+		exitCode := -1
+		// try to get the original exit code
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			exitCode = exitError.ExitCode()
+		}
+		logger.Warnf("Wrapped command finished with error: %v", err)
+		os.Exit(exitCode)
+	} else {
+		logger.Info("Wrapped command finished without errors")
+		os.Exit(exitCode)
 	}
-
-	cmd.Wait()
-
-	fmt.Println("Command terminated")
 }
