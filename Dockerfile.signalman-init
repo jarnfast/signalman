@@ -1,0 +1,19 @@
+FROM busybox:1.36.0-musl AS tmp
+ARG VERSION
+ARG TARGETPLATFORM
+
+COPY bin apptmp
+RUN TARGETNORM=$(echo $TARGETPLATFORM | sed 's/\//-/g'); \
+    TARGETBINARY="apptmp/$VERSION/signalman-$TARGETNORM"; \
+    echo "Target binary $TARGETBINARY"; \
+    cp $TARGETBINARY signalman; \
+    chmod 0555 signalman;
+
+
+FROM busybox:1.36.0-musl
+
+COPY --from=tmp --chown=1000:1000 signalman signalman
+
+USER 1000:1000
+
+ENTRYPOINT ["cp", "signalman", "/transfer/"]
