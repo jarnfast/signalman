@@ -15,6 +15,10 @@ type CmdWrapper struct {
 
 func NewCmdWrapper(logger *zap.SugaredLogger) *CmdWrapper {
 
+	if len(os.Args) == 1 {
+		logger.Panic("No command given")
+	}
+
 	args := os.Args[1:]
 	binary, err := exec.LookPath(args[0])
 	if err != nil {

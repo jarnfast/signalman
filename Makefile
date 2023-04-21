@@ -6,9 +6,7 @@ GO = GO111MODULE=on go
 COMMIT ?= $(shell git rev-parse --short HEAD)
 VERSION ?= $(shell git describe --tags 2> /dev/null || echo main)
 
-#LDFLAGS = -w -X $(PKG)/pkg.Version=$(VERSION) -X $(PKG)/pkg.Commit=$(COMMIT)
-#optimize flags -w -s
-#LDFLAGS = -w -X main.version=$(VERSION) -X main.build=$(COMMIT)
+# optimize flags -w -s
 LDFLAGS = -w -X jarnfast/signalman/pkg.Version=$(VERSION) -X jarnfast/signalman/pkg.Build=$(COMMIT)
 #XBUILD = CGO_ENABLED=0 $(GO) build -a -tags netgo -ldflags '$(LDFLAGS)'
 XBUILD = CGO_ENABLED=0 $(GO) build -a -ldflags '$(LDFLAGS)'
@@ -41,10 +39,12 @@ build:
 run: build
 	./$(BINDIR)
 
+.PHONY: xbuild-freebsd
 xbuild-freebsd:
 	rm bin/main/signalman-freebsd-amd64
 	$(MAKE) $(MAKE_OPTS) PLATFORM=freebsd ARCH=amd64 xbuild;
 
+.PHONY: xbuild-all
 xbuild-all:
 	$(MAKE) $(MAKE_OPTS) PLATFORM=windows ARCH=amd64 xbuild;
 	$(MAKE) $(MAKE_OPTS) PLATFORM=darwin ARCH=amd64 xbuild;
@@ -53,6 +53,7 @@ xbuild-all:
 	$(MAKE) $(MAKE_OPTS) PLATFORM=linux ARCH=arm GOARM=6 xbuild;
 	$(MAKE) $(MAKE_OPTS) PLATFORM=linux ARCH=arm GOARM=7 xbuild;
 
+.PHONY: xbuild
 xbuild: $(BINDIR)/$(VERSION)/$(MIXIN)-$(PLATFORM)-$(ARCH)$(ARMVERSION)$(FILE_EXT)
 $(BINDIR)/$(VERSION)/$(MIXIN)-$(PLATFORM)-$(ARCH)$(ARMVERSION)$(FILE_EXT):
 	mkdir -p $(dir $@)
@@ -70,4 +71,4 @@ test-integration: xbuild
 	$(GO) test -tags=integration ./tests/...
 
 clean:
-	-rm -fr bin/
+	rm -fr bin/
