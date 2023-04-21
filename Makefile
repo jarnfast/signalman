@@ -16,7 +16,7 @@ ARCH ?= $(shell go env GOARCH)
 
 BINDIR = bin
 
-MIXIN = signalman
+BINNAME = signalman
 
 ifeq ($(PLATFORM),windows)
 FILE_EXT=.exe
@@ -31,9 +31,9 @@ ARMVERSION=
 endif
 
 .PHONY: build
-build: 
+build:
 	mkdir -p $(BINDIR)
-	$(GO) build -ldflags '$(LDFLAGS)' -o $(BINDIR)/$(MIXIN)$(FILE_EXT) ./cmd/$(MIXIN)
+	$(GO) build -ldflags '$(LDFLAGS)' -o $(BINDIR)/$(BINNAME)$(FILE_EXT) ./cmd/$(BINNAME)
 
 .PHONY: run
 run: build
@@ -54,20 +54,20 @@ xbuild-all:
 	$(MAKE) $(MAKE_OPTS) PLATFORM=linux ARCH=arm GOARM=7 xbuild;
 
 .PHONY: xbuild
-xbuild: $(BINDIR)/$(VERSION)/$(MIXIN)-$(PLATFORM)-$(ARCH)$(ARMVERSION)$(FILE_EXT)
-$(BINDIR)/$(VERSION)/$(MIXIN)-$(PLATFORM)-$(ARCH)$(ARMVERSION)$(FILE_EXT):
+xbuild: $(BINDIR)/$(VERSION)/$(BINNAME)-$(PLATFORM)-$(ARCH)$(ARMVERSION)$(FILE_EXT)
+$(BINDIR)/$(VERSION)/$(BINNAME)-$(PLATFORM)-$(ARCH)$(ARMVERSION)$(FILE_EXT):
 	mkdir -p $(dir $@)
-	GOOS=$(PLATFORM) GOARCH=$(ARCH) GOARM=$(GOARM) $(XBUILD) -o $@ ./cmd/$(MIXIN)
+	GOOS=$(PLATFORM) GOARCH=$(ARCH) GOARM=$(GOARM) $(XBUILD) -o $@ ./cmd/$(BINNAME)
 
 test: test-unit
-	$(BINDIR)/$(MIXIN)$(FILE_EXT) version
+	$(BINDIR)/$(BINNAME)$(FILE_EXT) version
 
 test-unit: build
 	$(GO) test ./...
 
 test-integration: xbuild
 	# Test against the cross-built client binary that we will publish
-	cp $(BINDIR)/$(VERSION)/$(MIXIN)-$(PLATFORM)-$(ARCH)$(FILE_EXT) $(BINDIR)/$(MIXIN)$(FILE_EXT)
+	cp $(BINDIR)/$(VERSION)/$(BINNAME)-$(PLATFORM)-$(ARCH)$(FILE_EXT) $(BINDIR)/$(BINNAME)$(FILE_EXT)
 	$(GO) test -tags=integration ./tests/...
 
 clean:
