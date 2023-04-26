@@ -81,3 +81,7 @@ clean:
 .PHONY: docker-buildx
 docker-buildx:
 	docker buildx build --build-arg VERSION=$(VERSION) -t signalman-init:latest -f Dockerfile.signalman-init --platform $(PLATFORM)/$(ARCH)$(DOCKERARMVERSION) .
+
+.PHONY: generate-checksums
+generate-checksums:
+	cd bin/$(VERSION) && find . -type f -exec sh -c "sha256sum -b {} > {}.sha256sum" \;
