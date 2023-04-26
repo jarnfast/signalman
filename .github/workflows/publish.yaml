@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+      - name: Get the version
+        id: get_version
+        run: echo VERSION=${GITHUB_REF/refs\/tags\//} >> "$GITHUB_ENV"
+      - name: Cross compile all
+        run: make xbuild-all VERSION=${{ env.VERSION }}
+      - name: Generate checksums
+        run: make generate-checksums VERSION=${{ env.VERSION }}
+      # - uses: actions/upload-artifact@v3
+      #   with:
+      #     name: xbinaries
+      #     path: bin/${{ env.VERSION }}/*
+      #     if-no-files-found: error
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            LICENSE
+            bin/${{ env.VERSION }}/signalman-*
